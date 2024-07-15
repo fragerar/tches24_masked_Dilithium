@@ -11,6 +11,7 @@
 #define ROOT_OF_UNITY 1753
 
 #if DILITHIUM_MODE == 2
+#define MU 18
 #define K 4
 #define L 4
 #define ETA 2
@@ -21,6 +22,7 @@
 #define OMEGA 80
 
 #elif DILITHIUM_MODE == 3
+#define MU 20
 #define K 6
 #define L 5
 #define ETA 4
@@ -31,6 +33,7 @@
 #define OMEGA 55
 
 #elif DILITHIUM_MODE == 5
+#define MU 20
 #define K 8
 #define L 7
 #define ETA 2

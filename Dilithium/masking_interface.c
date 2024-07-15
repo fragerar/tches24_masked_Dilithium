@@ -2,6 +2,9 @@
 #include "../Masking/dilithium_gadgets.h"
 #include "params.h"
 #include "polyvec.h"
+#include "fips202.h"
+
+
 
 
 
@@ -28,12 +31,17 @@ uint32_t center_to_canon(int32_t x){
 
 
 void masked_sample_y(masked_polyvecl* masked_y){
+  /* Randomized version of Dilithium. */
   polyvecl* y;
   uint32_t masked_coeff[N_SHARES];
 
   for(int i=0; i < L; ++i){
     for(int j=0; j < N; ++j){
+      #ifdef FAST
+      gen_y_fast(masked_coeff, N_SHARES);
+      #else
       gen_y(masked_coeff, N_SHARES);
+      #endif
       for(int k=0; k < N_SHARES; ++k){
           y = &(masked_y->shares[k]);
           y->vec[i].coeffs[j] = canon_to_centered(masked_coeff[k]);
@@ -43,10 +51,60 @@ void masked_sample_y(masked_polyvecl* masked_y){
 }
 
 
+void masked_sample_y_MLDSA(masked_polyvecl* masked_y, uint8_t* seed, uint16_t mu){
+  /* Correspond to expand_mask in MLDSA */
+  int out_size = 32*mu;
+  uint8_t out[out_size*N_SHARES];
+  int seed_size=64; //see FIPS 204
+  int in_size = seed_size + 2; 
+  uint8_t in[(in_size)*N_SHARES];
+  uint32_t masked_coeff_modq[N_SHARES];
+  uint64_t masked_coeff[N_SHARES];
+  
+  uint16_t y_raw_coeffs[(out_size/2)*N_SHARES];
+  for(int i=0; i < N_SHARES; ++i){
+    for(int j=0; j < seed_size; ++j){
+      in[j+in_size*i] = seed[j+seed_size*i];
+    }
+    in[seed_size   + in_size*i] = 0;
+    in[seed_size+1 + in_size*i] = 0;
+  }
+  for(uint16_t r=0; r < L; ++r){
+    uint16_t n = r+mu;
+    in[seed_size+1] = (uint8_t)(n>>8);
+    in[seed_size  ] = (uint8_t)(n&0xFFFF);
+
+    shake256_masked(out, out_size, in, in_size); //32MU bytes = 256MU bits 
+ 
+
+    for(int i=0; i < out_size*N_SHARES; i+=2 ) y_raw_coeffs[i/2] = (((uint16_t)(out[i])) << 8) | ((uint16_t)(out[i+1]));
+ 
+
+    for(int i=0; i < N; ++i){
+ 
+      int offset = (16 - ((i+1)*mu)%16)%16;
+      for(int j=0; j < N_SHARES; ++j){
+ 
+        uint16_t a = y_raw_coeffs[(i*mu/16)+0 + j*out_size/2]; // outsize/2 because bits are packed by 16 and not 8.
+        uint16_t b = y_raw_coeffs[(i*mu/16)+1 + j*out_size/2];
+        uint32_t share = ((((uint32_t)a)<<(16-offset)) | ((uint32_t)(b>>offset)))%(1LU<<mu);
+        
+        masked_coeff[j] = (uint64_t)share;
+
+      }
+      gen_y_det(masked_coeff, masked_coeff_modq, N_SHARES);
+
+      for(int j=0; j < N_SHARES; ++j) (masked_y->shares[j]).vec[r].coeffs[i] = canon_to_centered(masked_coeff_modq[j]);
+    }
+
+  }
+
+}
+
 
 
 int masked_rejection_sampling_z(masked_polyvecl* mz){
-  /* Should return 1 if reject */
+  /* Return 1 if reject */
   uint32_t temp[N_SHARES];
 
   for(int i=0; i < L; ++i){
@@ -54,7 +112,11 @@ int masked_rejection_sampling_z(masked_polyvecl* mz){
       for(int k=0; k < N_SHARES; ++k){
         temp[k] = center_to_canon(mz->shares[k].vec[i].coeffs[j]);
       }
-    if (ABC_rejection_sampling(temp, 0, N_SHARES) == 0) return 1;
+    #ifdef FAST
+    if ((single_coeff_reject(temp, 0, DIL_Q, N_SHARES)) == 0) return 1;
+    #else
+    if (old_rejection_sampling(temp, 0, N_SHARES) == 0) return 1;
+    #endif
     }
   }
   return 0;
@@ -69,11 +131,17 @@ int masked_rejection_sampling_r(masked_polyveck* mr){
       for(int k=0; k < N_SHARES; ++k){
         temp[k] = center_to_canon(mr->shares[k].vec[i].coeffs[j]);
       }
-    if (ABC_rejection_sampling(temp, 1, N_SHARES) == 0) return 1;
+    #ifdef FAST
+    if ((single_coeff_reject(temp, 1, DIL_Q, N_SHARES)) == 0) return 1;
+    #else
+    if (old_rejection_sampling(temp, 1, N_SHARES) == 0) return 1;
+    #endif
     }
   }
   return 0;
 }
+
+
 
 
 
@@ -95,6 +163,20 @@ void masked_decompose(polyveck* r1, masked_polyveck* mr0, masked_polyveck* mr){
 }
 
 
+
+void mask_bitstring(uint8_t* bs_out, uint8_t* bs_in, int len){
+  uint8_t temp;
+  for(int i=0; i < len; ++i){
+    bs_out[i] = bs_in[i]; 
+    for(int j=1; j < N_SHARES; ++j){
+      temp = rand32()&0xFF;
+      bs_out[i + len*j]  = temp;
+      bs_out[i        ] ^= temp;
+
+    }
+  }
+
+}
 
 
 void unmask_polyvecl(masked_polyvecl* mpv, polyvecl* pv){

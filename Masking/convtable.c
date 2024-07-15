@@ -27,6 +27,18 @@
 #include "utils.h"
 
 
+#define PORTABLE
+
+#ifndef PORTABLE
+typedef unsigned __int128 uint128_t;
+#endif
+
+#ifndef PORTABLE
+uint128_t rand128(void) {
+  return (((uint128_t) rand64()) << 64) | ((uint128_t) rand64());
+}
+#endif
+  
 
 
 
@@ -80,8 +92,6 @@ void bool2ArithSPOGmodq64(uint64_t *x, uint64_t *y, uint64_t q, int n)
   }
 }
 
-
-
 // Boolean to arithmetic, l bits as input, and modulo q as ouptput
 // This is Algorithm 1 in signatures.pdf, and corresponds to [SPOG19]
 // We consider the NI version, without the last LinearRefresh
@@ -100,23 +110,20 @@ void bool2ArithSPOGmodqMulti(uint32_t *x,uint32_t *y,int l,int q,int n)
   }
 }
 
-
-void FullRefreshArith(uint32_t *a,uint32_t *b,int n)
+void bool2ArithSPOGmodqMulti64(uint64_t *x, uint64_t *y, int l, uint64_t q, int n)
 {
-  for(int i=0;i<n;i++)
-    b[i]=a[i];
-
-  for(int i=0;i<n;i++)
+  for(int i=0;i<n;i++) y[i]=0;
+  for(int j=0;j<l;j++)
   {
-    for(int j=i+1;j<n;j++)
-    {
-      uint32_t tmp=rand32();
-      b[i]+=tmp;
-      b[j]-=tmp;
-    }
+    uint64_t z[n];
+    for(int i=0;i<n;i++)
+      z[i]=(x[i] >> j) & 1;
+    uint64_t v[n];
+    bool2ArithSPOGmodq64(z,v,q,n);
+    for(int i=0;i<n;i++)
+      y[i]+=(v[i] << j) % q;
   }
 }
-
 
 // Arithmetic shift, 1-bit shift with complexity O(n^2)
 // This corresponds to Algorithm3 in signatures.pdf
@@ -143,8 +150,6 @@ void shift3(uint32_t *x,uint32_t *a,int k,int n)
 }
 
 
- 
-
 // Optimized algorithm, doing 1 shift at a time
 // This corresponds to [Algorithm11,CGMZ22]
 // Based on shift3
@@ -169,6 +174,5 @@ void arith2BoolOpti3NI(uint32_t *x,uint32_t *y,int k,int n)
     }
   }
 }
-
 
 

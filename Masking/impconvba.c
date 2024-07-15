@@ -8,7 +8,6 @@
 
 // We also implement the variant algorithm working for any integer q, not only a power-of-two.
 
-//#define DEBUG
 
 #include <stdint.h>
 #include <stdio.h>
@@ -101,7 +100,29 @@ static void impconvBA_rec(uint32_t *D_,uint32_t *x,int n)
   #endif
 }
 
+// we assume 2^alpha>n, and k+alpha<=32
+void impconvBAmodq(uint32_t *D_,uint32_t *in,int q,int k,int alpha,int n)
+{
+  uint32_t x[n];
+  impconvBA(x,in,n);
 
+  uint32_t y[n];
+  for(int i=0;i<n;i++)
+    y[i]=(x[i] >> k) & ((1 << alpha)-1);
+  
+  y[0]+=(1 << alpha)-1;
+
+  uint32_t d[n];
+  arith2BoolOpti3NI(y,d,2*alpha,n);
+  for(int i=0;i<n;i++)
+    d[i]=d[i] >> alpha;
+
+  uint32_t da[n];
+  bool2ArithSPOGmodqMulti(d,da,alpha,q,n);
+  
+  for(int i=0;i<n;i++)
+    D_[i]=((x[i] & ((1 << (k+alpha))-1))+q-((da[i] << (k+alpha)) % q)) % q;
+}
 
 
 uint64_t Psi64(uint64_t x,uint64_t y)
@@ -182,6 +203,3 @@ static void impconvBA_rec64(uint64_t *D_,uint64_t *x,int n)
   assert(xorop(x,n+1)==addop(D_,n));
   #endif
 }
-
-
-

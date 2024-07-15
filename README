@@ -1,13 +1,29 @@
-To replicate Tables 5, 6, 7 and 10: 
-1. go to ./Masking/
-2. make
-3. ./main
+The code is split into two folders. The folder "Masking" acts as a library and contains the standalone gadgets described in the paper. The folder Dilithium contains the actual
+masked implementation of the signature scheme. The file ./Dilithium/masking_interface.c connects the library to the masked signature.
 
-To replicate Table 8: 
-1. go to ./Dilithium
-2. Edit params.h and/or masking_interface.h to chose security level and masking order
-3. make
-4 ./main
-The vector of values output correspond to the cycles for: [NTT, SampleY, AY, Decompose, Z=y+cs1, Reject, w-cs2]  
+To replicate the tables 6 & 7 (and 5 & 8 if loaded on a M4 MCU):
 
-To automatically run signature benchmarks at multiple orders and for multiple security levels, one can also use the run_benchmarks Python script. 
+cd Masking
+make
+./main
+
+Tests will be directly run at multiple orders.
+Note that the tests for no-abort and early-abort read precomputed signatures from a txt file. The one provided with the submission is quite small in order to avoid uploading
+a heavy file but we used a large one with thousand of signatures to get the results given in the paper.
+
+
+To replicate tables 9, 11 & 12, a bit more work is required as the different orders and versions of the signature are controlled with macros.
+In the file masking_interface.h, one will find a macro to choose the order (MASKING_ORDER) and a macro to enable/disable the ML-DSA version.
+After setting the desired parameters:
+
+cd Dilithium
+make simple_tests
+./main
+
+This will output the breakdown of the signature for the chosen order and version as well as independent benchmarks for the ML-DSA and randomized sampling of y.
+Note that in order to avoid editing the code multiple times in order to iterate on the different possible orders, an automatized Python script called run_benchmark.py
+compiles and run the code at multiple orders. The vector of values output by the signature breakdown as the following format:
+
+(NTT, SampleY, AY, Decompose, Z=y+cs1, Reject, w-cs2)
+
+The tests have been performed only for the set of parameters Dilithium 2.

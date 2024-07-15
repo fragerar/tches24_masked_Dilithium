@@ -63,8 +63,46 @@ void ExpandArith(uint32_t *x,uint32_t *xp,int n2,int n)
   }
 }
 
+// Boolean to arithmetic conversion modulo 2^32 using [SPOG19]
+void ConvertBA_SPOG(uint32_t *x,uint32_t *y,int n)
+{
+  if(n==1)
+  {
+    y[0]=x[0];
+    return;
+  }
 
+  uint32_t A[n/2];
+  ConvertBA_SPOG(x,A,n/2);
+  uint32_t Ap[n];
+  ExpandArith(A,Ap,n/2,n);
+  
+  uint32_t B[(n+1)/2];
+  ConvertBA_SPOG(x+n/2,B,(n+1)/2);
+  uint32_t Bp[n];
+  ExpandArith(B,Bp,(n+1)/2,n);
+
+  SecMul(Ap,Bp,y,n);
+  for(int i=0;i<n;i++)
+    y[i]=Ap[i]+Bp[i]-2*y[i];
+}
+
+void testConvertBA_SPOG()
+{
+  int n=4,l=1;
+  uint32_t x[n];
+  initTab(x,n);
+  while (1)
+  {
+    uint32_t A[n];
+    ConvertBA_SPOG(x,A,n);
+    assert((xorop(x,n)==addop(A,32,n)));
+    if(incTab(x,l,n)) break;
+  }
+}
+  
 // We assume that p<2^(k-1)
+// For Kyber with q=3329, we can take k=13 
 void SecAddModp(uint32_t *x,uint32_t *y,uint32_t *z,uint32_t p,int k,int n)
 {
   uint32_t s[n];
@@ -99,7 +137,6 @@ void SecAddModp(uint32_t *x,uint32_t *y,uint32_t *z,uint32_t p,int k,int n)
     z[i]=z2[i] ^ z3[i];
 }
   
-
 
 void Expand(uint32_t *x,uint32_t *xp,int k,int n2,int n)
 {
@@ -174,7 +211,6 @@ void ConvertAB(uint32_t *A,uint32_t *z,int k,int n)
 }
 
 
-
 void ConvertABModp(uint32_t *A,uint32_t *z,uint32_t p,int k,int n)
 {
   if(n==1)
@@ -197,9 +233,45 @@ void ConvertABModp(uint32_t *A,uint32_t *z,uint32_t p,int k,int n)
 }
 
 
+// Boolean to arithmetic conversion based on [CGV14]
+void ConvertBA(uint32_t *x,uint32_t *A,int k,int n)
+{
+  for(int i=0;i<n-1;i++) A[i]=genrand(k);
+  uint32_t Ap[n];
+  for(int i=0;i<n-1;i++) Ap[i]=-A[i];
+  Ap[n-1]=0;
+
+  uint32_t y[n];
+  ConvertAB(Ap,y,k,n);
+
+  uint32_t z[n];
+  SecAdd(x,y,z,k,n);
+  
+  for(int i=0;i<n;i++)
+    refreshBool(z,k,n);
+
+  A[n-1]=xorop(z,n);
+}
+
+void ConvertBAModp(uint32_t *x,uint32_t *A,uint32_t p,int k,int n)
+{
+  for(int i=0;i<n-1;i++) A[i]=rand32() % p;
+  uint32_t Ap[n];
+  for(int i=0;i<n-1;i++) Ap[i]=p-A[i];
+  Ap[n-1]=0;
+
+  uint32_t y[n];
+  ConvertABModp(Ap,y,p,k,n);
+
+  uint32_t z[n];
+  SecAddModp(x,y,z,p,k,n);
+  
+  for(int i=0;i<n;i++)
+    refreshBool(z,k,n);
+
+  A[n-1]=xorop(z,n);
+}
 
 
-
-   
 
 

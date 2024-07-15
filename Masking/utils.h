@@ -25,14 +25,20 @@ void SecAdd(uint32_t *x,uint32_t *y,uint32_t *z,int k,int n);
 
 void SecMul(uint32_t *a,uint32_t *b,uint32_t *c,int n);
 void SecMultModp(uint32_t *a,uint32_t *b,uint32_t *c,uint32_t p,int n);
+void secMulAssignment(uint32_t* res, uint32_t* x, uint32_t q, int n);
 
 
+void initTab(uint32_t *a,int n);
+int incTab(uint32_t *a,int l,int n);
 
 void printShares(uint32_t *a,int n);
 void printArith(uint32_t *a, int p, int n);
+void printsArith(int32_t *a, int32_t p, int n);
 void printBool(uint32_t *a, int n);
+void printBoolBitstring(uint8_t* bs, int size, int n);
 
 void printArith64(uint64_t *a, uint64_t p, int n);
+void printsArith64(int64_t *a, int64_t p, int n);
 void printBool64(uint64_t *a, int n);
 
 

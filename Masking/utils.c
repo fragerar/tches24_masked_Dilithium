@@ -187,6 +187,7 @@ void SecAdd(uint32_t *x,uint32_t *y,uint32_t *z,int k,int n)
 // Secure multiplication modulo 2^32
 void SecMul(uint32_t *a,uint32_t *b,uint32_t *c,int n)
 {
+  // c <- a*b
   for(int i=0;i<n;i++)
     c[i]=a[i]*b[i];
 
@@ -204,6 +205,7 @@ void SecMul(uint32_t *a,uint32_t *b,uint32_t *c,int n)
 
 void SecMultModp(uint32_t *a,uint32_t *b,uint32_t *c,uint32_t p,int n)
 {
+  // c <- a*b mod p
   int i,j; 
   for(i=0;i<n;i++)
     c[i]=((uint64_t)a[i]*b[i]) % p;
@@ -223,6 +225,68 @@ void SecMultModp(uint32_t *a,uint32_t *b,uint32_t *c,uint32_t p,int n)
 
 
 
+void secMulAssignment(uint32_t* res, uint32_t* x, uint32_t q, int n){
+  // res *= x mod q
+  uint32_t c[n];
+
+  for(int i=0;i<n;i++)
+    c[i]= (res[i]*x[i])%q;
+
+  for(int i=0;i<n;i++)
+  {
+    for(int j=i+1;j<n;j++)
+    {
+      uint32_t tmp=rand32()%q;
+      uint64_t tmp2=(tmp+res[i]*x[j])+res[j]*x[i];
+      tmp2 %= q;
+      c[i] = (c[i] + q - tmp)%q;
+      c[j] = (c[j] +tmp2)%q;
+    }
+  }
+
+
+  for(int i=0; i < n; ++i) res[i] = c[i];
+}
+
+
+
+void initTab(uint32_t *a,int n)
+{
+  for(int i=0;i<n;i++)
+    a[i]=0;
+}
+
+int incTab(uint32_t *a,int l,int n)
+{
+  unsigned lim=1 << l;
+  for(int i=0;i<n;i++)
+  {
+    a[i]+=1;
+    if(a[i]<lim) break;
+    a[i]=0;
+    if(i==(n-1)) return 1;
+  }
+  return 0;
+}
+
+
+void printBoolBitstring(uint8_t* bs, int size, int n){
+  uint8_t s[size];
+  for(int j=0; j < size; ++j) s[j] = bs[j];
+
+  for(int i=1; i < n; ++i){
+    for(int j=0; j < size; ++j){
+      s[j] ^= bs[j + size*i];
+    }
+  }
+
+  for(int j=0; j < size; ++j) printf("%02X", s[j]);
+  printf("\n");
+
+}
+
+
+
 void printShares(uint32_t *a,int n)
 {
   for(int i=0;i<n;i++)
@@ -236,6 +300,18 @@ void printArith(uint32_t *a, int p, int n)
     printf("%u ",a[i]);
   if (p == 0) printf(" = %u \n", addop(a, 32, n));
   else printf(" = %u \n", addopmodp(a, p, n));
+  
+}
+
+void printsArith(int32_t *a, int32_t p, int n)
+{
+  int32_t res = 0;
+  for(int i=0;i<n;i++){
+    if (p == 0) res = (res + a[i]);
+    else        res = (res + a[i])%p;
+    printf("%i ",a[i]);
+  }
+  printf(" = %i \n", res);
   
 }
 
@@ -260,6 +336,18 @@ void printArith64(uint64_t *a, uint64_t p, int n)
   
 }
 
+void printsArith64(int64_t *a, int64_t p, int n)
+{
+  int64_t res = 0;
+  for(int i=0;i<n;i++){
+    if (p == 0) res = (res + a[i]);
+    else        res = (res + a[i])%p;
+    printf("%li ",a[i]);
+  }
+  printf(" = %li \n", res);
+  
+}
+
 void printBool64(uint64_t *a,int n)
 {
   uint64_t res = 0;
@@ -273,6 +361,56 @@ void printBool64(uint64_t *a,int n)
 
 
 
+
+#ifdef TESTS_UTILS
+
+static void testSecAdd()
+{
+  int n=3,l=3;
+  int l2=1 << l;
+  uint32_t a[n],b[n];
+  initTab(a,n);
+  while (1)
+  {
+    initTab(b,n);
+    while (1)
+    {
+      uint32_t c[n];
+      SecAdd(a,b,c,l,n);
+      assert(((xorop(a,n)+xorop(b,n)) % l2)==xorop(c,n) % l2);
+      if(incTab(b,l,n)) break;
+    }
+    if(incTab(a,l,n)) break;
+  }
+}
+
+
+static void testSecMul()
+{
+  int n=3,l=3;
+  uint32_t a[n],b[n];
+  initTab(a,n);
+  while (1)
+  {
+    initTab(b,n);
+    while (1)
+    {
+      uint32_t c[n];
+      SecMul(a,b,c,n);
+      assert(((addop(a,l,n)*addop(b,l,n)) % (1 << l))==addop(c,l,n));
+      if(incTab(b,l,n)) break;
+    }
+    if(incTab(a,l,n)) break;
+  }
+}
+
+
+
+int main(){
+  testSecAdd();
+  testSecMul();
+}
+#endif
 
 
 

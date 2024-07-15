@@ -18,7 +18,7 @@ int bench_masked_crypto_sign_signature(uint8_t *sig,
                           size_t *siglen,
                           const uint8_t *m,
                           size_t mlen, uint8_t* seedbuf,
-                          masked_polyvecl* ms1, masked_polyveck* ms2, polyveck* t0, uint64_t* bench_vector)
+                          masked_polyvecl* ms1, masked_polyveck* ms2, polyveck* t0, uint8_t* masked_key, uint64_t* bench_vector)
 {
 
 
@@ -57,6 +57,26 @@ int bench_masked_crypto_sign_signature(uint8_t *sig,
   crh(rhoprime, key, SEEDBYTES + CRHBYTES);
 #endif */
 
+
+  #ifdef MLDSA_Y
+  uint8_t seed_y[64*N_SHARES];
+  uint8_t in[(SEEDBYTES+CRHBYTES)*N_SHARES];
+  for(int i=0; i < SEEDBYTES; ++i){
+    for(int j=0; j < N_SHARES; ++j){
+      in[i + (SEEDBYTES+CRHBYTES)*j] = masked_key[i + (SEEDBYTES)*j]; 
+    }
+  }
+
+  for(int i=SEEDBYTES; i < SEEDBYTES+CRHBYTES; ++i){
+    in[i] = mu[i-SEEDBYTES];
+    for(int j=1; j < N_SHARES; ++j){
+      in[i + (SEEDBYTES+CRHBYTES)*j] = 0; 
+    }
+  }
+  shake256_masked(seed_y, 64, in, SEEDBYTES+CRHBYTES);
+
+  #endif
+
   /* Expand matrix and transform vectors */
   polyvec_matrix_expand(mat, rho);
 
@@ -78,7 +98,12 @@ rej:
   /* Sample intermediate vector y */
   //polyvecl_uniform_gamma1(&y, rhoprime, nonce++);
   start = cpucycles();
+  #ifndef MLDSA_Y
   masked_sample_y(&my);
+  #else
+  seed_y[0] = (seed_y[0] + iter)&0xFF;
+  masked_sample_y_MLDSA(&my, seed_y, MU);
+  #endif
   bench_vector[1] += (cpucycles() - start);
   //z = y;
   mz = my;
@@ -191,13 +216,13 @@ int bench_masked_crypto_sign(uint8_t *sm,
                 const uint8_t *m,
                 size_t mlen,
                 uint8_t* seedbuf,
-                          masked_polyvecl* ms1, masked_polyveck* ms2, polyveck* t0, uint64_t* bench_vector)
+                          masked_polyvecl* ms1, masked_polyveck* ms2, polyveck* t0, uint8_t* masked_key, uint64_t* bench_vector)
 {
   size_t i;
   int rej;
   for(i = 0; i < mlen; ++i)
     sm[CRYPTO_BYTES + mlen - 1 - i] = m[mlen - 1 - i];
-  rej=bench_masked_crypto_sign_signature(sm, smlen, sm + CRYPTO_BYTES, mlen, seedbuf, ms1, ms2, t0, bench_vector);
+  rej=bench_masked_crypto_sign_signature(sm, smlen, sm + CRYPTO_BYTES, mlen, seedbuf, ms1, ms2, t0, masked_key, bench_vector);
   *smlen += mlen;
   return rej;
 }

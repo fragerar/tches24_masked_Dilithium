@@ -9,7 +9,7 @@
 #define RNG_MODE 1
 #endif
 
-#define COUNT
+//#define COUNT
 #ifdef COUNT
 extern uint64_t count_rand;
 #endif

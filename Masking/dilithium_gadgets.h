@@ -65,11 +65,15 @@
 #define int128_t __int128_t
 #endif
 
+void ZeroEncoding(uint32_t *x, int q, int n);
+void RefreshQuasiLin(uint32_t *x, int q, int n);
+void ZeroEncoding64(uint64_t *x, uint64_t q, int n);
+void RefreshQuasiLin64(uint64_t *x, uint64_t q, int n);
 
 void securediv(uint32_t* x, uint32_t* y, int log_alpha, int inv_alpha, int q, int n);
 
 void generic_shift(uint32_t* x, uint32_t* y, int k, int q, int n);
-
+void generic_shift64(uint64_t* x, uint64_t* y, int k, uint64_t q, int n);
 
 void reject_sampling(uint32_t* x, uint32_t* z, int mode, int q, int n);
 int single_coeff_reject(uint32_t* x, int mode, int q, int n);

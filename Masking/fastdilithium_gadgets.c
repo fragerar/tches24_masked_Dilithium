@@ -13,8 +13,76 @@
 uint64_t count_rand = 0;
 #endif
 
+#ifndef FLOOR
+#define FLOOR(x, y) ((x) / (y))
+#endif
 
+#ifndef CEIL
+#define CEIL(x, y) (((x) + (y) - 1) / (y))
+#endif
 
+// XXX: NOTE: ZeroEncoding and RefreshQuasiLin added
+// compared to the original code from [CGL24]
+// (https://github.com/fragerar/tches24_masked_Dilithium)
+void ZeroEncoding(uint32_t *x, int q, int n)
+{
+    if(n == 1){
+        x[0] = 0;
+    }
+    else if(n == 2){
+        uint32_t r = rand32() % q;
+        x[0] = r;
+        x[1] = (q-r);
+    }
+    else{
+        ZeroEncoding(&x[0], q, FLOOR(n,2));
+        ZeroEncoding(&x[FLOOR(n,2)], q, CEIL(n,2));
+        for(int i=0; i < FLOOR(n,2); i++){
+            uint32_t r = rand32() % q;
+            x[i] = (x[i] + r) % q;
+            x[FLOOR(n,2) + i] = (x[FLOOR(n,2) + i] + q - r) % q;
+        }
+    }
+}
+
+void RefreshQuasiLin(uint32_t *x, int q, int n)
+{
+    uint32_t y[n];
+    ZeroEncoding(y, q, n);
+    for(int i=0; i < n; i++){
+        x[i] = (x[i] + y[i]) % q;
+    }
+}
+
+void ZeroEncoding64(uint64_t *x, uint64_t q, int n)
+{
+    if(n == 1){
+        x[0] = 0;
+    }
+    else if(n == 2){
+        uint64_t r = rand32() % q;
+        x[0] = r;
+        x[1] = (q-r);
+    }
+    else{
+        ZeroEncoding64(&x[0], q, FLOOR(n,2));
+        ZeroEncoding64(&x[FLOOR(n,2)], q, CEIL(n,2));
+        for(int i=0; i < FLOOR(n,2); i++){
+            uint64_t r = rand32() % q;
+            x[i] = (x[i] + r) % q;
+            x[FLOOR(n,2) + i] = (x[FLOOR(n,2) + i] + q - r) % q;
+        }
+    }
+}
+
+void RefreshQuasiLin64(uint64_t *x, uint64_t q, int n)
+{
+    uint64_t y[n];
+    ZeroEncoding64(y, q, n);
+    for(int i=0; i < n; i++){
+        x[i] = (x[i] + y[i]) % q;
+    }
+}
 
 static int zero_test_mul(uint32_t* x, int q, int n){
   // returns 1 if x = 0 mod Q
@@ -74,14 +142,77 @@ void LMSwitch(uint32_t* x, uint32_t* y, int q, int rho, int n){
 
 
   generic_shift(y, delta, alpha, 1<<rho, n);
-  refreshArithModp(delta, 1<<rho, n);
 
-  for(int i=0; i < n; ++i) y[i] = ((uint64_t)x[i] + ((q<<rho) - q*delta[i]))%(q<<rho);
+  // XXX: NOTE: [CGL24] original code was using the linear refresh
+  // refreshArithModp: this has been fixed below to the quasi-linear RefreshQuasiLin
+
+  //refreshArithModp(delta, 1<<rho, n);
+  RefreshQuasiLin(delta, 1<<rho, n);
+
+  for(int i=0; i < n; ++i) y[i] = ((uint64_t)x[i] + (uint64_t)(((uint64_t)q<<rho) - q*delta[i]))%(uint64_t)((uint64_t)q<<rho);
 
   
 }
 
+void LMSwitch64(uint32_t* x, uint64_t* y, int q, int rho, int n){
+  // maps x mod q to x mod q*2^rho
+  int T[15] = {1,2,3,3,4,4,4,4,5,5,5,5,5,5,5};
+  int alpha = T[n-1];
 
+  uint64_t delta[n];
+
+  for(int i=0; i < n; ++i) y[i] = ((uint64_t)x[i]<<(uint64_t)(alpha))/q;
+  y[0] = (y[0] + (uint64_t)n-(uint64_t)1+(uint64_t)(1<<(alpha-2)))%(uint64_t)(1<<(rho+alpha));
+
+
+
+  generic_shift64(y, delta, alpha, 1<<rho, n);
+
+  // XXX: NOTE: [CGL24] original code was using the linear refresh
+  // refreshArithModp: this has been fixed below to the quasi-linear RefreshQuasiLin
+  //refreshArithModp(delta, 1<<rho, n);
+  RefreshQuasiLin64(delta, 1<<rho, n);
+
+  for(int i=0; i < n; ++i) y[i] = ((uint64_t)x[i] + (uint64_t)((uint64_t)((uint64_t)q<<rho) - (uint64_t)q*(uint64_t)delta[i]))%(uint64_t)((uint64_t)q<<rho);
+
+  
+}
+
+// XXX: NOTE: below we distinguish ML-DSA-65 because of possible overflows (we need to use uint64_t precision)
+// In order to avoid losing performance on embedded platforms where uint64_t can be costly, we still use uint32_t for ML-DSA-{44,87}
+#if DILITHIUM_MODE==3
+void reject_sampling(uint32_t* x, uint32_t* z, int mode, int q, int n){
+
+  /* Algorithm 2*/
+  uint32_t a = 0;
+
+  uint64_t u[n], y[n], y_p[n], t1[n], t2[n];
+  uint32_t t1_[n], t2_[n];
+
+  if (mode == 0){ //reject z
+    a = D_GAMMA1 - D_BETA;
+  } else {
+    a = D_GAMMA2 - D_BETA;
+  }
+
+  LMSwitch64(x, u, q, RHO, n);
+  for(int i=1; i < n; ++i) y[i] = u[i]; 
+  y[0] = ((uint64_t)u[0] + (uint64_t)((uint64_t)q<<RHO) - (uint64_t)a)%(uint64_t)((uint64_t)q<<RHO);
+  generic_shift64(y, t1, RHO, q, n);
+  for(int i=0; i < n; ++i) y_p[i] = ((uint64_t)((uint64_t)q<<RHO) - u[i]);
+  y_p[0] = ((uint64_t)y_p[0] + (uint64_t)((uint64_t)q<<RHO) - (uint64_t)a)%(uint64_t)((uint64_t)q<<RHO);
+
+  // XXX: NOTE: [CGL24] original code was using the linear refresh
+  // refreshArithModp: this has been fixed below to the quasi-linear RefreshQuasiLin
+  //refreshArithModp(y_p, q<<RHO, n);
+  RefreshQuasiLin64(y_p, (uint64_t)q<<RHO, n);
+  generic_shift64(y_p, t2, RHO, q, n);
+  for(int i=0; i < n; ++i) t1_[i] = t1[i];
+  for(int i=0; i < n; ++i) t2_[i] = t2[i];
+  SecMultModp(t1_, t2_, z, q, n);
+  
+}
+#else
 void reject_sampling(uint32_t* x, uint32_t* z, int mode, int q, int n){
 
   /* Algorithm 2*/
@@ -95,21 +226,21 @@ void reject_sampling(uint32_t* x, uint32_t* z, int mode, int q, int n){
     a = D_GAMMA2 - D_BETA;
   }
 
-  
-
   LMSwitch(x, u, q, RHO, n);
   for(int i=1; i < n; ++i) y[i] = u[i]; 
-  y[0] = (u[0] + ((q<<RHO) - a))%(q<<RHO);
+  y[0] = (u[0] + (q<<RHO) - a)%(q<<RHO);
   generic_shift(y, t1, RHO, q, n);
   for(int i=0; i < n; ++i) y_p[i] = ((q<<RHO) - u[i]);
   y_p[0] = (y_p[0] + (q<<RHO) - a)%(q<<RHO);
-  refreshArithModp(y_p, q<<RHO, n);
+
+  // XXX: NOTE: [CGL24] original code was using the linear refresh
+  // refreshArithModp: this has been fixed below to the quasi-linear RefreshQuasiLin
+  //refreshArithModp(y_p, q<<RHO, n);
+  RefreshQuasiLin(y_p, q<<RHO, n);
   generic_shift(y_p, t2, RHO, q, n);
-  SecMultModp(t1, t2, z, q, n);
-  
-
+  SecMultModp(t1, t2, z, q, n);  
 }
-
+#endif
 
 void gen_y_fast(uint32_t* y, int n){
   /* Generates a random y masked mod q in the interval [-2^{mu-1}, 2^{mu-1}) */

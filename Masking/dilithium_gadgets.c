@@ -186,7 +186,7 @@ uint64_t portable_128_bit_mul_shift(uint64_t a, uint64_t b, int k){
     uint64_t upper = (hi_lo >> 32) + (cross >> 32)        + hi_hi;
     uint64_t lower = (cross << 32) | (lo_lo & 0xFFFFFFFF);
 
-    return ((upper&((1<<k)-1)) << (64-k)) | (lower >> k);
+    return ((upper&(((uint64_t)1<<k)-1)) << (64-k)) | (lower >> k);
 
 
 }
